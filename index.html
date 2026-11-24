@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Futura - Calendar</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+<aside class="sidebar">
+<div class="sidebar-top"><div class="gear">⚙</div><div class="tagline">MANCA SOLO UNA VITTORIA</div></div>
+<div class="stats-container">
+<section class="stat-card"><div class="stat-header">QUESTA SETTIMANA</div><div class="stat-content"><div class="stat-legend">
+<div><span class="dot blu"></span><span id="weekTotal">0</span></div>
+<div><span class="dot verde"></span><span id="weekPositive">0</span></div>
+<div><span class="dot bianco"></span><span id="weekNeutral">0</span></div>
+<div><span class="dot rosso"></span><span id="weekNegative">0</span></div>
+</div><div class="ring" id="weekPercent">0%</div></div></section>
+<section class="stat-card"><div class="stat-header">QUESTO MESE</div><div class="stat-content"><div class="stat-legend">
+<div><span class="dot blu"></span><span id="monthTotal">0</span></div>
+<div><span class="dot verde"></span><span id="monthPositive">0</span></div>
+<div><span class="dot bianco"></span><span id="monthNeutral">0</span></div>
+<div><span class="dot rosso"></span><span id="monthNegative">0</span></div>
+</div><div class="ring" id="monthPercent">0%</div></div></section>
+<section class="stat-card"><div class="stat-header">QUESTO ANNO</div><div class="stat-content"><div class="stat-legend">
+<div><span class="dot blu"></span><span id="yearTotal">0</span></div>
+<div><span class="dot verde"></span><span id="yearPositive">0</span></div>
+<div><span class="dot bianco"></span><span id="yearNeutral">0</span></div>
+<div><span class="dot rosso"></span><span id="yearNegative">0</span></div>
+</div><div class="ring" id="yearPercent">0%</div></div></section>
+</div>
+</aside>
+
+<main class="main">
+<header class="main-header">
+<div class="brand"><b>FUTURA</b><span> - CALENDAR</span></div>
+<div class="navigation">
+<div class="year-nav"><button id="prevYear">‹</button><button id="yearButton" class="year-button">2026</button><button id="nextYear">›</button></div>
+<div class="month-nav"><button id="prevMonth">‹</button><span id="monthLabel" class="month-label">/</span><button id="nextMonth">›</button></div>
+</div>
+</header>
+<div id="subline" class="subline"></div>
+<div class="weekdays"><span>LUN</span><span>MAR</span><span>MER</span><span>GIO</span><span>VEN</span><span>SAB</span><span>DOM</span></div>
+<div id="grid" class="grid"></div>
+<section class="agenda">
+<div id="agendaTitle" class="agenda-title">Seleziona un giorno</div>
+<div class="agenda-form"><input id="itemInput" type="text" placeholder="Aggiungi un obiettivo per questo giorno..."><button id="itemAdd">Aggiungi</button></div>
+<div id="agendaList" class="agenda-list"></div>
+</section>
+</main>
+</div>
+
+<div id="yearPicker" class="year-picker">
+<div class="year-picker-header"><span>SELEZIONA ANNO</span><button id="closeYearPicker">×</button></div>
+<div class="year-input-row"><input id="yearInput" type="number" min="1" max="9999" placeholder="Es. 2028"><button id="goToYear">Vai</button></div>
+</div>
+
+<div id="contextMenu" class="context-menu">
+<div class="context-title">VALUTA GIORNATA</div>
+<button class="context-option positive" data-status="positive"><span class="context-color"></span>Positiva</button>
+<button class="context-option neutral" data-status="neutral"><span class="context-color"></span>Neutrale</button>
+<button class="context-option negative" data-status="negative"><span class="context-color"></span>Negativa</button>
+<div class="context-separator"></div>
+<button id="removeStatus" class="remove-status">Rimuovi valutazione</button>
+</div>
+
+<script>
+const MONTHS_COUNT=13,DAYS_PER_MONTH=28,TOTAL_DAYS=364,REAL_TODAY=new Date();
+let currentYear=REAL_TODAY.getFullYear(),selectedMonth=1,selectedDay=1,contextYear=null,contextMonth=null,contextDay=null;
+
+function customDateFromReal(date){const start=new Date(date.getFullYear(),0,1);const doy=Math.floor((date-start)/86400000)+1;const wrapped=((doy-1)%TOTAL_DAYS)+1;return{month:Math.ceil(wrapped/DAYS_PER_MONTH),day:((wrapped-1)%DAYS_PER_MONTH)+1};}
+const today=customDateFromReal(REAL_TODAY);selectedMonth=today.month;selectedDay=today.day;
+
+const gridEl=document.getElementById('grid'),monthLabelEl=document.getElementById('monthLabel'),sublineEl=document.getElementById('subline'),agendaTitleEl=document.getElementById('agendaTitle'),agendaListEl=document.getElementById('agendaList'),itemInputEl=document.getElementById('itemInput'),contextMenu=document.getElementById('contextMenu'),yearPicker=document.getElementById('yearPicker'),yearInput=document.getElementById('yearInput');
+
+function monthLabel(n){let a=[],r=n;while(r>0){let g=Math.min(3,r);a.push('/'.repeat(g));r-=g;}return a.join(' ');}
+function statusKey(y,m,d){return `futura-day:${y}-${m}-${d}`;}
+function agendaKey(y,m,d){return `futura-checklist:${y}-${m}-${d}`;}
+function getStatus(y,m,d){return localStorage.getItem(statusKey(y,m,d));}
+function setStatus(y,m,d,s){if(!s)localStorage.removeItem(statusKey(y,m,d));else localStorage.setItem(statusKey(y,m,d),s);}
+function loadItems(y,m,d){try{const r=localStorage.getItem(agendaKey(y,m,d));return r?JSON.parse(r):[];}catch{return[];}}
+function saveItems(y,m,d,items){localStorage.setItem(agendaKey(y,m,d),JSON.stringify(items));}
+function isToday(y,m,d){return y===REAL_TODAY.getFullYear()&&m===today.month&&d===today.day;}
+
+function renderGrid(){
+monthLabelEl.textContent=monthLabel(selectedMonth);
+sublineEl.innerHTML=`Oggi corrisponde a: anno <b>${currentYear}</b>, mese <b>${monthLabel(selectedMonth)}</b> (${selectedMonth}ª unità), giorno <b>${selectedDay}</b>`;
+gridEl.innerHTML='';
+for(let d=1;d<=DAYS_PER_MONTH;d++){
+const cell=document.createElement('div');cell.className='day';
+if(isToday(currentYear,selectedMonth,d))cell.classList.add('today');
+if(d===selectedDay)cell.classList.add('selected');
+const status=getStatus(currentYear,selectedMonth,d);if(status)cell.classList.add(`status-${status}`);
+cell.textContent=d;
+const items=loadItems(currentYear,selectedMonth,d);
+if(items.length){const badge=document.createElement('span');badge.className='dotcount';badge.textContent=`${items.filter(i=>i.done).length}/${items.length}`;cell.appendChild(badge);}
+cell.addEventListener('click',()=>{selectedDay=d;renderGrid();renderAgenda();updateStatistics();});
+cell.addEventListener('contextmenu',e=>{e.preventDefault();selectedDay=d;contextYear=currentYear;contextMonth=selectedMonth;contextDay=d;renderGrid();renderAgenda();updateStatistics();openContextMenu(e.clientX,e.clientY);});
+gridEl.appendChild(cell);
+}}
+
+function renderAgenda(){
+agendaTitleEl.textContent=`Anno ${currentYear} — Mese ${monthLabel(selectedMonth)} — Giorno ${selectedDay}`;
+const items=loadItems(currentYear,selectedMonth,selectedDay);agendaListEl.innerHTML='';
+if(!items.length){const e=document.createElement('div');e.className='agenda-empty';e.textContent='Nessun obiettivo per questo giorno.';agendaListEl.appendChild(e);return;}
+items.forEach(item=>{
+const row=document.createElement('div');row.className='agenda-item'+(item.done?' done':'');
+const cb=document.createElement('input');cb.type='checkbox';cb.checked=item.done;cb.addEventListener('change',()=>{item.done=cb.checked;saveItems(currentYear,selectedMonth,selectedDay,items);renderAgenda();renderGrid();});
+const text=document.createElement('span');text.textContent=item.text;
+const del=document.createElement('button');del.textContent='✕';del.addEventListener('click',()=>{saveItems(currentYear,selectedMonth,selectedDay,items.filter(x=>x.id!==item.id));renderAgenda();renderGrid();});
+row.append(cb,text,del);agendaListEl.appendChild(row);
+});}
+
+function addItem(){const text=itemInputEl.value.trim();if(!text)return;const items=loadItems(currentYear,selectedMonth,selectedDay);items.push({id:Date.now()+'-'+Math.random().toString(36).slice(2),text,done:false});saveItems(currentYear,selectedMonth,selectedDay,items);itemInputEl.value='';renderAgenda();renderGrid();}
+function openContextMenu(x,y){contextMenu.style.display='block';contextMenu.style.left=Math.max(10,Math.min(x,innerWidth-contextMenu.offsetWidth-10))+'px';contextMenu.style.top=Math.max(10,Math.min(y,innerHeight-contextMenu.offsetHeight-10))+'px';}
+function closeContextMenu(){contextMenu.style.display='none';}
+
+function absoluteIndex(y,m,d){return y*TOTAL_DAYS+(m-1)*DAYS_PER_MONTH+d-1;}
+function fromIndex(i){const y=Math.floor(i/TOTAL_DAYS),r=((i%TOTAL_DAYS)+TOTAL_DAYS)%TOTAL_DAYS;return{year:y,month:Math.floor(r/DAYS_PER_MONTH)+1,day:r%DAYS_PER_MONTH+1};}
+function getWeekDays(y,m,d){const start=Math.floor(absoluteIndex(y,m,d)/7)*7;return Array.from({length:7},(_,i)=>fromIndex(start+i));}
+function getMonthDays(y,m){return Array.from({length:28},(_,i)=>({year:y,month:m,day:i+1}));}
+function getYearDays(y){const a=[];for(let m=1;m<=13;m++)for(let d=1;d<=28;d++)a.push({year:y,month:m,day:d});return a;}
+function getStatistics(days){let total=0,positive=0,neutral=0,negative=0;days.forEach(({year,month,day})=>{const s=getStatus(year,month,day);if(!s)return;total++;if(s==='positive')positive++;if(s==='neutral')neutral++;if(s==='negative')negative++;});return{total,positive,neutral,negative,percent:total?Math.round(positive/total*100):0};}
+function setStats(p,s){document.getElementById(p+'Total').textContent=s.total;document.getElementById(p+'Positive').textContent=s.positive;document.getElementById(p+'Neutral').textContent=s.neutral;document.getElementById(p+'Negative').textContent=s.negative;document.getElementById(p+'Percent').textContent=s.percent+'%';}
+function updateStatistics(){setStats('week',getStatistics(getWeekDays(currentYear,selectedMonth,selectedDay)));setStats('month',getStatistics(getMonthDays(currentYear,selectedMonth)));setStats('year',getStatistics(getYearDays(currentYear)));}
+
+function changeYear(delta){currentYear=Math.max(1,Math.min(9999,currentYear+delta));renderGrid();renderAgenda();updateStatistics();}
+function changeMonth(delta){selectedMonth+=delta;if(selectedMonth<1){selectedMonth=13;currentYear=Math.max(1,currentYear-1);}else if(selectedMonth>13){selectedMonth=1;currentYear=Math.min(9999,currentYear+1);}selectedDay=1;renderGrid();renderAgenda();updateStatistics();}
+
+function openYearPicker(){yearPicker.classList.add('open');yearInput.value='';yearInput.focus();}
+function closeYearPicker(){yearPicker.classList.remove('open');}
+
+document.getElementById('prevYear').onclick=()=>changeYear(-1);
+document.getElementById('nextYear').onclick=()=>changeYear(1);
+document.getElementById('prevMonth').onclick=()=>changeMonth(-1);
+document.getElementById('nextMonth').onclick=()=>changeMonth(1);
+document.getElementById('yearButton').onclick=openYearPicker;
+document.getElementById('closeYearPicker').onclick=closeYearPicker;
+document.getElementById('goToYear').onclick=()=>{const y=Number(yearInput.value);if(Number.isInteger(y)&&y>=1&&y<=9999){currentYear=y;closeYearPicker();renderGrid();renderAgenda();updateStatistics();}};
+yearInput.onkeydown=e=>{if(e.key==='Enter')document.getElementById('goToYear').click();};
+
+document.querySelectorAll('.context-option').forEach(b=>b.onclick=()=>{setStatus(contextYear,contextMonth,contextDay,b.dataset.status);closeContextMenu();renderGrid();updateStatistics();});
+document.getElementById('removeStatus').onclick=()=>{setStatus(contextYear,contextMonth,contextDay,null);closeContextMenu();renderGrid();updateStatistics();};
+document.addEventListener('click',e=>{if(!contextMenu.contains(e.target))closeContextMenu();if(!yearPicker.contains(e.target)&&e.target.id!=='yearButton')closeYearPicker();});
+document.getElementById('itemAdd').onclick=addItem;
+itemInputEl.onkeydown=e=>{if(e.key==='Enter')addItem();};
+
+renderGrid();renderAgenda();updateStatistics();
+</script>
+</body>
+</html>
